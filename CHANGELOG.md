@@ -6,6 +6,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-07-22
+
 ### Added
 - Schema budget guardrail (`tests/test_schema_budget.py`): fails CI
   when total tool schema JSON exceeds 45 KB, so schema bloat cannot
