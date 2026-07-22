@@ -2,7 +2,7 @@
 
 ## How to Use These Tools Effectively
 
-This guide helps LLMs (like Claude) understand how to use Zendriver MCP tools for browser automation and security testing.
+This guide helps LLMs (like Claude) use Zendriver MCP for browser automation.
 
 ---
 
@@ -29,8 +29,13 @@ This guide helps LLMs (like Claude) understand how to use Zendriver MCP tools fo
 
 ## Finding Elements - Best Practices
 
-### CSS Selectors (Most Reliable)
-Use these selector patterns:
+### Interaction Tree (Fastest Overview)
+`get_interaction_tree()` returns a compact JSON list of interactive
+elements (max 150 by default, raise `limit` for more), each with a
+numeric `id`. Those ids double as selectors: `click(selector="12")`,
+`type_text(text="hi", selector="7")`.
+
+### CSS Selectors
 
 | Pattern | Example | When to Use |
 |---------|---------|-------------|
@@ -44,15 +49,20 @@ Use these selector patterns:
 ### Finding by Text (When Selectors Fail)
 ```
 click(text="Sign In")
-click(text="Submit")
 find_element(text="Welcome")
+```
+
+### Accessibility Tree (Stable uids)
+```
+get_accessibility_snapshot()   # tree with uids like "ax_1b2c"
+click_by_uid(uid="ax_1b2c")    # deterministic click
+describe_uid(uid="ax_1b2c")    # inspect before clicking
 ```
 
 ### Strategy When Element Not Found:
 1. First try: `find_element(selector="...")` to check if it exists
-2. If not found: `get_content()` or `get_text_content()` to see page structure
-3. Try broader selector: `find_all_elements(selector="button")` to see all buttons
-4. Use `highlight_element(selector="...")` to visually verify
+2. If not found: `get_interaction_tree()` or `get_text_content()` to see the page
+3. Try broader: `find_all_elements(selector="button")`, `find_buttons()`, `find_inputs()`
 
 ---
 
@@ -80,56 +90,43 @@ find_element(text="Welcome")
    type_text(text="john@test.com", selector="#email")
 ```
 
-### Scrape Data
+### Scrape Data (Paginated)
+`get_content` and `get_text_content` return 10,000 chars per call.
+The first line reports the slice and total, e.g.
+`[chars 0-10000 of 54321] (next: offset=10000)` - pass that offset to
+continue, or raise `max_chars` when you really need more at once.
 ```
 1. navigate to page
-2. get_text_content()  # for visible text
-3. OR get_content()    # for full HTML
-4. OR get_links()      # for all links
-5. OR execute_js('return document.querySelectorAll("...").map(...)')  # custom extraction
+2. get_text_content()                      # visible text, first 10k chars
+3. get_text_content(offset=10000)          # next slice if needed
+4. get_content(max_chars=30000)            # full HTML, bigger slice
+5. OR execute_js('[...document.querySelectorAll(".item")].map(e => e.innerText)')
 ```
 
 ### Take Screenshots
 ```
-screenshot()                              # full page
-screenshot(filename="output.png")         # save to file
-screenshot_element(selector=".chart")     # specific element
+screenshot()                              # returned image, downscaled to max 1024px wide
+screenshot(save_path="output.png")        # also save to disk at full resolution
+screenshot(full_resolution=True)          # return without downscaling (costs more tokens)
+```
+
+### Shadow DOM (Custom Elements)
+```
+describe_shadow(selector="nes-button")    # dump nested shadow tree
+click_shadow(selector="nes-button")       # click the real inner control
+human_click(text="Verstuur")              # shadow-aware humanlike click
 ```
 
 ---
 
-## Security Testing Workflow
+## Security Testing
 
-### Quick Security Audit
 ```
 1. start_browser()
 2. navigate("https://target-site.com")
 3. wait(2)
-4. run_security_audit()  # comprehensive overview
+4. run_security_audit()  # headers, forms, mixed content, exposed data
 ```
-
-### Detailed Security Analysis
-```
-1. run_security_audit()           # overview
-2. find_forms_security()          # analyze all forms
-3. find_sensitive_data()          # look for exposed data
-4. analyze_javascript_security()  # check JS issues
-5. check_mixed_content()          # HTTP/HTTPS issues
-6. find_external_resources()      # third-party dependencies
-```
-
-### Security Tools Available:
-| Tool | What It Checks |
-|------|----------------|
-| `run_security_audit` | Overall security score |
-| `analyze_security_headers` | Missing security headers |
-| `find_forms_security` | CSRF, password fields, form actions |
-| `find_sensitive_data` | Exposed emails, API keys, tokens |
-| `find_input_vulnerabilities` | Input validation issues |
-| `check_mixed_content` | HTTP resources on HTTPS |
-| `analyze_javascript_security` | eval(), innerHTML, etc. |
-| `check_clickjacking_protection` | Frame protection |
-| `find_external_resources` | Third-party scripts |
 
 ---
 
@@ -138,14 +135,15 @@ screenshot_element(selector=".chart")     # specific element
 ### Wait for Elements
 ```
 wait_for_element(selector="#loaded-content", timeout=10)
-wait_for_text(text="Success", timeout=10)
+wait_for_network()                        # wait until network goes idle
+wait_for_request(url_pattern="/api/")     # wait for a specific call to complete
 ```
 
 ### Handle SPAs (Single Page Apps)
 ```
 1. navigate to page
 2. wait(3)  # SPAs need more time
-3. scroll(direction="down", amount=500)  # trigger lazy loading
+3. scroll(direction="down", pixels=500)  # trigger lazy loading
 4. wait(1)
 5. Now interact with content
 ```
@@ -153,7 +151,7 @@ wait_for_text(text="Success", timeout=10)
 ### Infinite Scroll Pages
 ```
 for i in range(5):
-    scroll(direction="down", amount=1000)
+    scroll(direction="down", pixels=1000)
     wait(1)
 get_content()  # now has more content
 ```
@@ -164,38 +162,34 @@ get_content()  # now has more content
 
 ```
 1. start_browser()
-2. navigate("https://site1.com")    # opens in tab_1
-3. new_tab("https://site2.com")     # opens tab_2
-4. list_tabs()                       # see all tabs
-5. switch_tab("tab_1")              # go back to first
-6. close_tab("tab_2")               # close second
+2. navigate("https://site1.com")    # first tab
+3. new_tab("https://site2.com")     # second tab
+4. list_tabs()                      # see all tabs + ids
+5. switch_tab(tab_id="...")         # go back
+6. close_tab(tab_id="...")          # close one
 ```
 
 ---
 
 ## JavaScript Execution
 
+Do NOT use `return` statements - the script is wrapped automatically
+and the last expression is the result.
+
 ### Simple Queries
 ```
-execute_js('return document.title')
-execute_js('return document.querySelectorAll("a").length')
+execute_js('document.title')
+execute_js('document.querySelectorAll("a").length')
 ```
 
 ### Extract Data
 ```
 execute_js('''
-    return Array.from(document.querySelectorAll('.product')).map(p => ({
+    Array.from(document.querySelectorAll('.product')).map(p => ({
         name: p.querySelector('.name')?.innerText,
         price: p.querySelector('.price')?.innerText
     }))
 ''')
-```
-
-### Modify Page
-```
-execute_js('document.body.style.background = "red"')
-hide_element(selector=".annoying-popup")
-remove_element(selector=".cookie-banner")
 ```
 
 ---
@@ -204,7 +198,7 @@ remove_element(selector=".cookie-banner")
 
 ### Element Not Found
 1. Check if page loaded: `get_page_info()`
-2. See page structure: `get_content()` or `get_text_content()`
+2. See page structure: `get_interaction_tree()` or `get_text_content()`
 3. Try finding all similar: `find_all_elements(selector="button")`
 4. Wait longer: `wait(3)` then retry
 5. Try text search: `find_element(text="Button Text")`
@@ -213,13 +207,15 @@ remove_element(selector=".cookie-banner")
 1. Check URL: `get_page_info()`
 2. Take screenshot: `screenshot()`
 3. Check for errors: `get_console_logs()`
-4. Try reload: `reload_page()`
+4. Cloudflare wall? `is_cloudflare_challenge_present()` then `bypass_cloudflare()`
+5. Try reload: `reload_page()`
 
 ### Clicks Not Working
 1. Scroll to element: `scroll_to_element(selector="...")`
 2. Wait after scroll: `wait(0.5)`
-3. Try clicking by coordinates: First find element, then `mouse_click(x, y)`
-4. Use JavaScript: `execute_js('document.querySelector("...").click()')`
+3. Custom element? `describe_shadow(...)` then `click_shadow(...)`
+4. Try humanlike: `human_click(selector="...")`
+5. Last resort by coordinates: `mouse_click(x, y)`
 
 ---
 
@@ -227,8 +223,8 @@ remove_element(selector=".cookie-banner")
 
 1. **Always start/stop browser** - Don't leave browsers running
 2. **Use waits after navigation** - Pages need time to load
-3. **Take screenshots for verification** - Visual confirmation helps
-4. **Handle errors gracefully** - Elements may not always exist
+3. **Prefer get_interaction_tree over get_content** - Far fewer tokens for interaction work
+4. **Take screenshots for verification** - Visual confirmation helps
 5. **Be specific with selectors** - Avoid ambiguous matches
 6. **Use headless for speed** - `start_browser(headless=True)` when no visual needed
 7. **Clean up storage if needed** - `clear_storage()` between tests
