@@ -7,6 +7,16 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ## [Unreleased]
 
 ### Added
+- `use_default_browser_cookies(domains)` copies cookies from the user's
+  default browser into the automation browser, so an agent can continue
+  in a session the user is already logged in to. The user is asked first
+  through MCP elicitation, with the browser and the sites named in the
+  prompt, and nothing is read before they say yes. Clients without
+  elicitation support are refused unless the user sets
+  `ZENDRIVER_MCP_ALLOW_BROWSER_COOKIES=1`. Reads Firefox, Zen and
+  LibreWolf, Chrome, Arc, Brave, Edge, Vivaldi, Opera and Chromium, and
+  Safari, on macOS and Linux. Firefox-family session cookies (no expiry
+  date) are not included.
 - Thirteen tools ported from upstream (`ShubhamChoulkar/Zendriver-MCP`
   `34cc504`), rewritten against this fork's conventions (timeout guard,
   typed errors, artifact sandbox, paginated output):

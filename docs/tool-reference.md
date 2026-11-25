@@ -1,6 +1,6 @@
 # Tool reference
 
-111 tools across 23 modules. Full signatures live in the module docstrings
+112 tools across 23 modules. Full signatures live in the module docstrings
 (`src/tools/*.py`); this page is a flat catalogue.
 
 ## Browser lifecycle (`browser.py`)
@@ -125,6 +125,20 @@ CDP-level; sees HTTP-only cookies and all origins.
 
 - `export_cookies(file_path)`, `import_cookies(file_path)`
 - `list_all_cookies()`, `clear_all_cookies()`
+- `use_default_browser_cookies(domains)` - copy the user's own cookies from
+  their default browser, after asking them
+
+`use_default_browser_cookies` asks the user through MCP elicitation and reads
+nothing until they say yes. The prompt names the browser and the sites, or
+says "ALL sites" when `domains` is left out. A client that cannot show the
+prompt is refused, unless the user starts the server with
+`ZENDRIVER_MCP_ALLOW_BROWSER_COOKIES=1`.
+
+Supported on macOS and Linux: Firefox, Zen, LibreWolf, Chrome, Arc, Brave,
+Edge, Vivaldi, Opera, Chromium and Safari. Chromium browsers on macOS make
+the Keychain show its own prompt once. Safari needs Full Disk Access for the
+app that runs the server. Firefox-family browsers only hand over cookies
+with an expiry date; pure session cookies are not in their cookie file.
 
 ## Network control (`network_control.py`)
 

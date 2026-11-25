@@ -114,12 +114,11 @@ class DevToolsTools(ToolBase):
         Returns the absolute file path. If ``file_path`` is empty, writes to
         a timestamped file in the system temp directory. The output matches
         the format that Chrome DevTools' "Load profile" accepts.
-
-        Handlers and state are cleared via ``finally`` so a failed
-        ``tracing.end()`` or a late ``tracingComplete`` never leaves the
-        tool stuck on "a trace is already in progress" for the rest of the
-        process.
         """
+        # Handlers and state are cleared via ``finally`` so a failed
+        # ``tracing.end()`` or a late ``tracingComplete`` never leaves the
+        # tool stuck on "a trace is already in progress" for the rest of
+        # the process.
         if (
             self._trace_events is None
             or self._trace_complete is None

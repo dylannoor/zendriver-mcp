@@ -185,6 +185,7 @@ export_cookies = _cookie_tools.export_cookies
 import_cookies = _cookie_tools.import_cookies
 list_all_cookies = _cookie_tools.list_all_cookies
 clear_all_cookies = _cookie_tools.clear_all_cookies
+use_default_browser_cookies = _cookie_tools.use_default_browser_cookies
 
 # network controls
 block_urls = _network_control_tools.block_urls
@@ -353,4 +354,5 @@ __all__ = [
     "start_recording",
     "stop_recording",
     "replay_action_sequence",
+    "use_default_browser_cookies",
 ]

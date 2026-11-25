@@ -66,9 +66,6 @@ class LighthouseTools(ToolBase):
           ``best-practices``, ``seo``, ``pwa``. Defaults to the first four.
         - ``form_factor``: ``"mobile"`` or ``"desktop"``.
         - ``output_path``: where to save the JSON report. Empty => temp file.
-
-        The browser must have been started with remote-debugging exposed,
-        which zendriver does by default.
         """
         binary = shutil.which("lighthouse")
         if not binary:

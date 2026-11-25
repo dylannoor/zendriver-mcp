@@ -80,6 +80,17 @@ describe_uid(uid="ax_1b2c")    # inspect before clicking
 8. screenshot()  # verify login worked
 ```
 
+### Use a Session the User Is Already Logged In To
+```
+1. start_browser()
+2. use_default_browser_cookies(domains=["github.com"])   # the user gets a prompt
+3. navigate("https://github.com/settings")               # already logged in
+```
+Always pass the sites you need; leave `domains` out only when the user
+asked for everything. The user sees a consent prompt and nothing is copied
+unless they accept. If they decline, carry on without the cookies (for
+example with a normal login) and do not ask again.
+
 ### Fill a Form
 ```
 1. Use fill_form with JSON:
