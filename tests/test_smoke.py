@@ -12,7 +12,7 @@ def test_mcp_server_initialises() -> None:
 def test_expected_tool_count() -> None:
     # Guards against accidental tool removal; bump when we deliberately add tools.
     tools = mcp._tool_manager._tools
-    assert len(tools) >= 111, f"expected at least 111 tools registered, got {len(tools)}"
+    assert len(tools) >= 112, f"expected at least 112 tools registered, got {len(tools)}"
 
 
 def test_core_tools_registered() -> None:
@@ -76,6 +76,7 @@ def test_core_tools_registered() -> None:
         "start_recording",
         "stop_recording",
         "replay_action_sequence",
+        "use_default_browser_cookies",
     }
     missing = must_have - tools.keys()
     assert not missing, f"missing core tools: {missing}"

@@ -4,6 +4,7 @@ import functools
 import inspect
 import os
 import time
+import typing
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Coroutine
 from typing import Any
@@ -122,7 +123,11 @@ class ToolBase(ABC):
         """
         budget = float(timeout) if timeout is not None else DEFAULT_TOOL_TIMEOUT
         name = fn.__name__
-        signature = inspect.signature(fn)
+        # Resolve string annotations here, in the tool's own module. FastMCP
+        # resolves them against the wrapper's globals (this file), which
+        # only works by accident for names both modules import and not at
+        # all for a ``Context`` parameter.
+        signature = inspect.signature(fn, eval_str=True)
 
         @functools.wraps(fn)
         async def guarded(*args: Any, **kwargs: Any) -> Any:
@@ -139,6 +144,7 @@ class ToolBase(ABC):
         # Preserve the original signature so FastMCP still introspects the
         # right schema; wait_for+wraps keeps the coroutine type alive.
         guarded.__signature__ = signature  # type: ignore[attr-defined]
+        guarded.__annotations__ = typing.get_type_hints(fn)
         # Delete __wrapped__ so FastMCP's introspection doesn't follow it
         # back to the unbound function (which would expose `self` in the
         # schema and make the tool uncallable from the client).

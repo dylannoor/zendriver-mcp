@@ -17,7 +17,7 @@ that looks like an ordinary Chrome install.
 On top of that foundation, `zendriver-mcp` layers everything an agent needs
 to get work done: a token-efficient DOM walker, an accessibility tree with
 stable uids, performance traces, Lighthouse audits, heap snapshots, human-like
-input, device emulation, cookie round-tripping, and more - **111 tools across
+input, device emulation, cookie round-tripping, and more - **112 tools across
 23 modules**.
 
 ## Highlights
@@ -33,6 +33,8 @@ input, device emulation, cookie round-tripping, and more - **111 tools across
   via the Lighthouse CLI reusing the same browser.
 - **Session round-tripping.** Export all cookies (including HTTP-only ones)
   to JSON, re-import on the next session. Log in once, reuse everywhere.
+  Or let the agent ask for the cookies of your everyday browser: you get a
+  prompt naming the sites, and nothing is read until you say yes.
 - **Emulation.** iPhone 15 Pro, Pixel 8, iPad Pro, and desktop presets; CPU
   throttling; Slow 3G / Fast 3G / 4G / offline network profiles; force
   `prefers-color-scheme`.

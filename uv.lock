@@ -1877,6 +1877,7 @@ name = "zendriver-mcp"
 version = "0.3.4"
 source = { editable = "." }
 dependencies = [
+    { name = "cryptography" },
     { name = "mcp" },
     { name = "pillow" },
     { name = "zendriver" },
@@ -1897,6 +1898,7 @@ docs = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cryptography" },
     { name = "mcp", specifier = ">=1.0.0" },
     { name = "pillow" },
     { name = "zendriver", specifier = ">=0.18.0" },
