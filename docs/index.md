@@ -16,7 +16,7 @@ On that foundation, `zendriver-mcp` layers everything an agent needs to get
 work done: a token-efficient DOM walker, an accessibility tree with stable
 uids, performance traces, Lighthouse audits, heap snapshots, human-like input,
 device emulation, cookie round-tripping, request interception, and more -
-**96 tools across 22 modules**.
+**111 tools across 23 modules**.
 
 ## Why
 

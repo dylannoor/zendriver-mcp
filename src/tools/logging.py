@@ -1,5 +1,8 @@
 # logging tools - network and console log management
+import base64
 import time
+
+from zendriver import cdp
 
 from src.tools.base import ToolBase
 
@@ -14,6 +17,7 @@ class LoggingTools(ToolBase):
         self._register(self.clear_logs)
         self._register(self.wait_for_network)
         self._register(self.wait_for_request)
+        self._register(self.get_network_response_body)
 
     async def get_network_logs(self, limit: int = 20) -> str:
         """Get recent network request logs captured via CDP."""
@@ -87,11 +91,12 @@ class LoggingTools(ToolBase):
     ) -> str:
         """Wait for a matching request to **complete** (response received).
 
-        Only log entries with a resolved status code are considered, so this
-        returns after the server replied, not the moment Chrome sent the
-        request. ``url_pattern`` is a case-insensitive substring of the full
-        URL; ``method`` optionally filters on HTTP verb.
+        ``url_pattern`` is a case-insensitive URL substring; ``method``
+        optionally filters on HTTP verb.
         """
+        # Only log entries with a resolved status code are considered, so this
+        # returns after the server replied, not the moment Chrome sent the
+        # request.
         start = time.time()
         safe_pattern = url_pattern.lower()
         safe_method = method.upper() if method else None
@@ -123,3 +128,46 @@ class LoggingTools(ToolBase):
             await self.session.page.wait(0.2)
 
         return f"Timeout: No completed request matching '{url_pattern}' found after {timeout}s"
+
+    async def get_network_response_body(
+        self,
+        url_pattern: str,
+        method: str | None = None,
+        max_chars: int = 10000,
+        offset: int = 0,
+    ) -> str:
+        """Get the response body of the latest captured request matching ``url_pattern``.
+
+        Filters and pagination work as in wait_for_request and get_content.
+        """
+        safe_pattern = url_pattern.lower()
+        safe_method = method.upper() if method else None
+
+        for log in reversed(self.session.get_network_logs(1000)):
+            request_id = log.get("_request_id")
+            if not request_id or safe_pattern not in log.get("url", "").lower():
+                continue
+            if safe_method and log.get("method", "GET") != safe_method:
+                continue
+
+            header = f"{log.get('method')} {log.get('url', '')[:100]} {log.get('status')}"
+            try:
+                body, is_base64 = await self.session.page.send(
+                    cdp.network.get_response_body(request_id)
+                )
+            except Exception as exc:  # noqa: BLE001 - CDP raises for evicted bodies
+                # Chrome drops bodies after a navigation and only serves
+                # them for the tab that made the request.
+                return f"{header}\nError: body unavailable ({exc})"
+            if is_base64:
+                raw = base64.b64decode(body)
+                try:
+                    body = raw.decode("utf-8")
+                except UnicodeDecodeError:
+                    return (
+                        f"{header}\n[binary body, {len(raw)} bytes, "
+                        f"{log.get('mime_type', 'unknown type')}; use download_file to save it]"
+                    )
+            return f"{header}\n{self._paginate(body, max_chars, offset)}"
+
+        return f"No captured request matching '{url_pattern}'"

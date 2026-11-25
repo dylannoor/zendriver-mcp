@@ -103,11 +103,22 @@ continue, or raise `max_chars` when you really need more at once.
 5. OR execute_js('[...document.querySelectorAll(".item")].map(e => e.innerText)')
 ```
 
+### Structured Extraction
+```
+get_links(filter_text="pdf")              # text -> href, deduplicated
+extract_table(selector="#prices", format="markdown")
+extract_structured_data()                 # JSON-LD, OpenGraph, meta tags
+get_network_response_body(url_pattern="/api/products")   # raw API response
+download_file(url="https://site.com/report.pdf", save_path="~/report.pdf")
+```
+`download_file` is an in-page fetch, so navigate to the file's site first.
+
 ### Take Screenshots
 ```
 screenshot()                              # returned image, downscaled to max 1024px wide
 screenshot(save_path="output.png")        # also save to disk at full resolution
 screenshot(full_resolution=True)          # return without downscaling (costs more tokens)
+screenshot_element(selector="#chart")     # just one element
 ```
 
 ### Shadow DOM (Custom Elements)
@@ -135,6 +146,7 @@ human_click(text="Verstuur")              # shadow-aware humanlike click
 ### Wait for Elements
 ```
 wait_for_element(selector="#loaded-content", timeout=10)
+wait_for_text(text="Order confirmed")     # case-insensitive, sees shadow DOM
 wait_for_network()                        # wait until network goes idle
 wait_for_request(url_pattern="/api/")     # wait for a specific call to complete
 ```
@@ -155,6 +167,27 @@ for i in range(5):
     wait(1)
 get_content()  # now has more content
 ```
+
+### Popups and Overlays in the Way
+```
+hide_element(selector=".cookie-banner")   # display:none
+remove_element(selector="#newsletter-modal")
+highlight_element(selector="#target")     # outline it, then screenshot() to check
+```
+
+---
+
+## Record and Replay
+
+```
+1. start_recording()
+2. navigate(...), click(...), type_text(...), wait_for_text(...)
+3. stop_recording()                       # returns the steps as JSON
+4. replay_action_sequence(sequence="[...]")   # stops at the first failing step
+```
+Record `wait_for_element` / `wait_for_text` between steps so the replay
+waits the same way. Numeric ids only replay if `get_interaction_tree`
+is part of the recording.
 
 ---
 
