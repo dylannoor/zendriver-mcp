@@ -1857,7 +1857,7 @@ wheels = [
 
 [[package]]
 name = "zendriver"
-version = "0.15.3"
+version = "0.18.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "asyncio-atexit" },
@@ -1867,9 +1867,9 @@ dependencies = [
     { name = "mss" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/bf/c1/3b453f2ca593bff7315ebeadad21f3d018ab26e5011b38356af001df9936/zendriver-0.15.3.tar.gz", hash = "sha256:83c38fe17489370f0c381dfb8b0d4d0bb9f5e7755c5748c99d72bf9886f59eee", size = 437115, upload-time = "2026-03-12T03:40:23.338Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d5/f0/36295fa12e4c4cef5fd6877d2aa96bd04232734b3ffa0537d9175407c6a0/zendriver-0.18.0.tar.gz", hash = "sha256:bc5c582edc988cd20127263ba8957c327167e59211d95730e48d48c80dab54ad", size = 490160, upload-time = "2026-11-21T01:09:22.888Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a5/05/138c171511f99c14a9f36a4ca132cf0e76c28308bf48a7d3d611dd9938be/zendriver-0.15.3-py3-none-any.whl", hash = "sha256:509526d16993d5f9486593720ed58c34027bd49d0f915444515aa45dd8a80741", size = 355949, upload-time = "2026-03-12T03:40:24.819Z" },
+    { url = "https://files.pythonhosted.org/packages/30/91/acae9e85b2adb45832fd276682ee62afa2e1be9000819234baba6b894ba9/zendriver-0.18.0-py3-none-any.whl", hash = "sha256:04e56630ebe4d987b303a506f08939e3a2f611429698e5c5c55a1a055b5c56eb", size = 386300, upload-time = "2026-11-21T01:09:21.464Z" },
 ]
 
 [[package]]
@@ -1899,7 +1899,7 @@ docs = [
 requires-dist = [
     { name = "mcp", specifier = ">=1.0.0" },
     { name = "pillow" },
-    { name = "zendriver", specifier = ">=0.14.0" },
+    { name = "zendriver", specifier = ">=0.18.0" },
 ]
 
 [package.metadata.requires-dev]
