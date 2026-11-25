@@ -17,8 +17,8 @@ that looks like an ordinary Chrome install.
 On top of that foundation, `zendriver-mcp` layers everything an agent needs
 to get work done: a token-efficient DOM walker, an accessibility tree with
 stable uids, performance traces, Lighthouse audits, heap snapshots, human-like
-input, device emulation, cookie round-tripping, and more - **96 tools across
-22 modules**.
+input, device emulation, cookie round-tripping, and more - **111 tools across
+23 modules**.
 
 ## Highlights
 

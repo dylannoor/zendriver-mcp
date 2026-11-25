@@ -6,6 +6,54 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+- Thirteen tools ported from upstream (`ShubhamChoulkar/Zendriver-MCP`
+  `34cc504`), rewritten against this fork's conventions (timeout guard,
+  typed errors, artifact sandbox, paginated output):
+  - `get_links`, `extract_table`, `extract_structured_data` for links,
+    table data (JSON or markdown) and JSON-LD / OpenGraph / meta tags.
+  - `highlight_element`, `hide_element`, `remove_element`.
+  - `get_network_response_body` returns the body of a captured request,
+    paginated like `get_content`; binary bodies are reported by size
+    instead of dumped.
+  - `screenshot_element`, `wait_for_text` (case-insensitive and
+    shadow-DOM aware, like `click(text=...)`) and `download_file`
+    (in-page fetch with the session's cookies).
+  - `start_recording`, `stop_recording`, `replay_action_sequence`.
+    Calls are recorded at the tool boundary, so `type_text` is one step
+    rather than a click plus a type. A replay validates every step up
+    front and stops at the first failing one.
+
+### Changed
+- Tool docstrings trimmed to usage guidance to stay inside the 45 KB
+  schema budget with 111 tools; the implementation notes moved into
+  code comments.
+- `click`, `click_shadow` now dispatch a real CDP
+  `Input.dispatchMouseEvent` at the target's viewport-centre instead
+  of a synthetic `element.click()` / `dispatchEvent(new MouseEvent(...))`
+  sequence. Synthetic events fire with `isTrusted = false` and are
+  ignored by handlers that gate on trust - Fluent UI v8 combobox (the
+  Azure Portal "Supported account types" dropdown is the canonical
+  case), Office Fabric callouts and similar widgets just stayed shut
+  when clicked with synthetic events. `human_click` already used CDP
+  mouse events; `click` now matches, without the bezier move.
+
+### Fixed
+- `find_inputs` crashed on every page: the shared shadow-DOM walker
+  handed the document (and each shadow root) itself to its callback,
+  and those have no `tagName`. The walker now only visits elements.
+- Requires `zendriver>=0.18.0`. Older bindings can't parse
+  `Network.requestWillBeSentExtraInfo` on Chrome 156+ (Chrome renamed
+  `privateNetworkRequestPolicy`), which logged a `KeyError` traceback
+  to stderr for every single request.
+- The network log now includes a page's own requests on the first
+  `navigate` and on `new_tab(url)`. The CDP listeners were attached
+  after the page had loaded, so the document and its first API calls
+  never showed up in `get_network_logs` / `wait_for_request`.
+- `click(text=...)` and `human_click(text=...)` only add the `(shadow)`
+  note when the clicked element really lives in a shadow root; it was
+  added for every plain `<button>` too.
+
 ## [0.3.4] - 2026-07-22
 
 ### Added

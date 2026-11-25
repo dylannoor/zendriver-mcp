@@ -66,9 +66,8 @@ class FormTools(ToolBase):
     async def fill_form(self, form_data: str) -> str:
         """Fill multiple form fields. Pass JSON like ``{"#email": "x@y.com"}``.
 
-        Reports which selectors succeeded and which were missing so the
-        caller can tell partial fills from full ones. Fields are cleared
-        before typing so values don't concatenate with existing content.
+        Fields are cleared first; the result lists which selectors were
+        filled and which were missing.
         """
         try:
             data = json.loads(form_data)
@@ -96,13 +95,13 @@ class FormTools(ToolBase):
         return f"Filled {len(filled)} field(s): {', '.join(filled)}"
 
     async def submit_form(self, selector: str = "form") -> str:
-        """Submit a form, honouring framework-level submit listeners.
+        """Submit a form so framework submit handlers and HTML validation run.
 
-        Uses ``form.requestSubmit()`` so React/Vue/Formik ``onSubmit``
-        handlers fire and HTML validation runs, falling back to a bubbling
-        ``submit`` event and finally ``form.submit()`` for ancient pages.
-        Returns an error if the selector matches no form.
+        Errors when the selector matches no form.
         """
+        # ``form.requestSubmit()`` makes React/Vue/Formik ``onSubmit`` handlers
+        # fire, falling back to a bubbling ``submit`` event and finally
+        # ``form.submit()`` for ancient pages.
         import json as _json
 
         sel_json = _json.dumps(selector)
@@ -127,18 +126,15 @@ class FormTools(ToolBase):
         return f"Form submitted: {selector} ({result})"
 
     async def press_key(self, key: str, selector: str | None = None) -> str:
-        """Press a keyboard key via CDP ``Input.dispatchKeyEvent``.
+        """Press a key with a real browser key event; ``selector`` is focused first.
 
-        Uses real browser key events, not synthetic JS dispatch - so native
-        form-submit semantics, browser shortcuts, and IME all behave as
-        they would with a human keyboard. When ``selector`` is given we
-        focus that element first.
-
-        Recognised names: ``Enter``, ``Tab``, ``Escape``, ``Backspace``,
-        ``Delete``, ``ArrowUp/Down/Left/Right``, ``Space``, ``Home``, ``End``,
-        ``PageUp``, ``PageDown``. Any single character (e.g. ``"a"``) is also
-        accepted.
+        Names: ``Enter``, ``Tab``, ``Escape``, ``Backspace``, ``Delete``,
+        ``ArrowUp/Down/Left/Right``, ``Space``, ``Home``, ``End``,
+        ``PageUp``, ``PageDown``, or any single character.
         """
+        # CDP ``Input.dispatchKeyEvent`` rather than synthetic JS dispatch, so
+        # native form-submit semantics, browser shortcuts, and IME all behave
+        # as they would with a human keyboard.
         if selector:
             await self.focus_selector(selector)
 

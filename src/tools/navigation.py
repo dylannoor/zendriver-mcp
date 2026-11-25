@@ -37,14 +37,12 @@ class NavigationTools(ToolBase):
         return "Page reloaded"
 
     async def get_page_info(self) -> dict[str, Any]:
-        """Return the current tab's URL and title.
-
-        Reads ``document.title`` and ``location.href`` via ``page.evaluate``
-        instead of trusting zendriver's cached ``tab.target`` metadata,
-        which can be stale right after navigation - and on some zendriver
-        versions ``tab.title`` is a coroutine method, so ``getattr`` would
-        return the bound method repr string.
-        """
+        """Return the current tab's URL and title."""
+        # Reads ``document.title`` and ``location.href`` via ``page.evaluate``
+        # instead of trusting zendriver's cached ``tab.target`` metadata,
+        # which can be stale right after navigation - and on some zendriver
+        # versions ``tab.title`` is a coroutine method, so ``getattr`` would
+        # return the bound method repr string.
         page = self.session.page
         info = await page.evaluate(
             "({url: location.href, title: document.title})",

@@ -40,6 +40,8 @@ class BrowserSession:
     _pending_requests: dict[str, dict[str, Any]] = {}
     _cdp_enabled_tabs: dict[int, bool] = {}  # Track tabs with CDP listeners
     _reset_callbacks: list[ResetCallback] = []
+    _recording: bool = False
+    _recorded_actions: list[dict[str, Any]] = []
 
     def __new__(cls) -> "BrowserSession":
         if cls._instance is None:
@@ -50,6 +52,8 @@ class BrowserSession:
             cls._pending_requests = {}
             cls._cdp_enabled_tabs = {}
             cls._reset_callbacks = []
+            cls._recording = False
+            cls._recorded_actions = []
         return cls._instance
 
     def register_reset_callback(self, callback: ResetCallback) -> None:
@@ -197,6 +201,8 @@ class BrowserSession:
             "type": str(event.type_) if event.type_ else pending.get("type", "unknown"),
             "mime_type": event.response.mime_type,
             "timestamp": datetime.now().isoformat(),
+            # Lets get_network_response_body fetch the body afterwards.
+            "_request_id": event.request_id,
         }
 
         self._network_logs.append(log_entry)
@@ -252,30 +258,28 @@ class BrowserSession:
         """Navigate to a URL."""
         browser = self.browser
         if new_tab or self._page is None:
-            self._page = await browser.get(url, new_tab=new_tab)
-            # Set up CDP listeners for the new tab
-            await self._setup_cdp_listeners(self._page)
+            # Open the tab blank and attach the listeners before loading
+            # ``url``, otherwise the page's own requests (document, first
+            # API calls) never reach the network log.
+            self._page = await browser.get("about:blank", new_tab=new_tab)
             # Track the tab
             self._tab_counter += 1
             tab_id = f"tab_{self._tab_counter}"
             self._tabs[tab_id] = self._page
-        else:
-            # Check if CDP listeners need to be set up for existing page
-            if not self._cdp_enabled_tabs.get(id(self._page)):
-                await self._setup_cdp_listeners(self._page)
-            await self._page.get(url)
+        if not self._cdp_enabled_tabs.get(id(self._page)):
+            await self._setup_cdp_listeners(self._page)
+        await self._page.get(url)
         return self._page
 
     async def create_tab(self, url: str | None = None) -> tuple[str, zd.Tab]:
         """Create a new tab and return its ID."""
         browser = self.browser
-        if url:
-            tab = await browser.get(url, new_tab=True)
-        else:
-            tab = await browser.get("about:blank", new_tab=True)
+        tab = await browser.get("about:blank", new_tab=True)
 
-        # Set up CDP listeners for the new tab
+        # Set up CDP listeners before loading ``url`` so its requests are logged
         await self._setup_cdp_listeners(tab)
+        if url:
+            await tab.get(url)
 
         self._tab_counter += 1
         tab_id = f"tab_{self._tab_counter}"
@@ -326,3 +330,18 @@ class BrowserSession:
         self._network_logs = []
         self._console_logs = []
         self._pending_requests = {}
+
+    def start_recording(self) -> None:
+        """Start capturing action tool calls, dropping any earlier capture."""
+        self._recording = True
+        self._recorded_actions = []
+
+    def stop_recording(self) -> list[dict[str, Any]]:
+        """Stop capturing and return the recorded actions."""
+        self._recording = False
+        return list(self._recorded_actions)
+
+    def record_action(self, action: str, params: dict[str, Any]) -> None:
+        """Append one tool call to the recording, if one is active."""
+        if self._recording:
+            self._recorded_actions.append({"action": action, "params": dict(params)})

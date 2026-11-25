@@ -19,6 +19,7 @@ from src.tools.network_control import NetworkControlTools
 from src.tools.permissions import PermissionsTools
 from src.tools.proxy import ProxyTools
 from src.tools.query import QueryTools
+from src.tools.recording import RecordingTools
 from src.tools.screencast import ScreencastTools
 from src.tools.stealth import StealthTools
 from src.tools.storage import StorageTools
@@ -51,6 +52,7 @@ _network_control_tools = NetworkControlTools(mcp)
 _permissions_tools = PermissionsTools(mcp)
 _proxy_tools = ProxyTools(mcp)
 _interception_tools = InterceptionTools(mcp)
+_recording_tools = RecordingTools(mcp)
 
 # export individual tool functions for backwards compatibility
 # browser lifecycle
@@ -80,6 +82,9 @@ clear_input = _element_tools.clear_input
 focus_element = _element_tools.focus_element
 select_option = _element_tools.select_option
 upload_file = _element_tools.upload_file
+highlight_element = _element_tools.highlight_element
+hide_element = _element_tools.hide_element
+remove_element = _element_tools.remove_element
 
 # query
 find_element = _query_tools.find_element
@@ -93,6 +98,9 @@ find_inputs = _query_tools.find_inputs
 get_content = _content_tools.get_content
 get_text_content = _content_tools.get_text_content
 get_interaction_tree = _content_tools.get_interaction_tree
+get_links = _content_tools.get_links
+extract_table = _content_tools.extract_table
+extract_structured_data = _content_tools.extract_structured_data
 scroll = _content_tools.scroll
 scroll_to_element = _content_tools.scroll_to_element
 
@@ -109,6 +117,7 @@ get_console_logs = _logging_tools.get_console_logs
 clear_logs = _logging_tools.clear_logs
 wait_for_network = _logging_tools.wait_for_network
 wait_for_request = _logging_tools.wait_for_request
+get_network_response_body = _logging_tools.get_network_response_body
 
 # forms
 fill_form = _form_tools.fill_form
@@ -119,9 +128,12 @@ mouse_click = _form_tools.mouse_click
 
 # utils
 screenshot = _utility_tools.screenshot
+screenshot_element = _utility_tools.screenshot_element
 execute_js = _utility_tools.execute_js
 wait = _utility_tools.wait
 wait_for_element = _utility_tools.wait_for_element
+wait_for_text = _utility_tools.wait_for_text
+download_file = _utility_tools.download_file
 run_security_audit = _utility_tools.run_security_audit
 
 # stealth
@@ -195,6 +207,11 @@ fail_requests = _interception_tools.fail_requests
 list_interceptions = _interception_tools.list_interceptions
 stop_interception = _interception_tools.stop_interception
 
+# recording
+start_recording = _recording_tools.start_recording
+stop_recording = _recording_tools.stop_recording
+replay_action_sequence = _recording_tools.replay_action_sequence
+
 __all__ = [
     # mcp server
     "mcp",
@@ -223,6 +240,7 @@ __all__ = [
     "PermissionsTools",
     "ProxyTools",
     "InterceptionTools",
+    "RecordingTools",
     # individual tool functions
     "start_browser",
     "stop_browser",
@@ -322,4 +340,17 @@ __all__ = [
     "stop_interception",
     "check_ffmpeg_available",
     "export_screencast_mp4",
+    "highlight_element",
+    "hide_element",
+    "remove_element",
+    "get_links",
+    "extract_table",
+    "extract_structured_data",
+    "get_network_response_body",
+    "screenshot_element",
+    "wait_for_text",
+    "download_file",
+    "start_recording",
+    "stop_recording",
+    "replay_action_sequence",
 ]

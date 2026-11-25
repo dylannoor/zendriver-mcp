@@ -33,14 +33,14 @@ class HumanInputTools(ToolBase):
     ) -> str:
         """Click an element with a humanish cursor path.
 
-        Accepts a CSS selector, the numeric ID from ``get_interaction_tree``,
-        or visible text. ``move_duration`` is how long the mouse takes to
-        reach the target (default 0.4s). Text-mode is shadow-DOM aware:
-        the walker finds the tightest interactive element matching the
-        text (descending into nested shadowRoots when needed) and aims
-        the cursor at its composed viewport rect, so clicks land on the
-        real handler inside custom elements like ``<nes-button>``.
+        Accepts a CSS selector, a numeric id from ``get_interaction_tree``,
+        or visible text (shadow-DOM aware). ``move_duration`` is how long
+        the mouse takes to reach the target.
         """
+        # Text mode finds the tightest interactive element matching the text
+        # (descending into nested shadowRoots when needed) and aims the cursor
+        # at its composed viewport rect, so clicks land on the real handler
+        # inside custom elements like ``<nes-button>``.
         if selector:
             selector = self.resolve_selector(selector)
             elem = await self.get_element(selector)

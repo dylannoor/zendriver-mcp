@@ -28,9 +28,55 @@ DEFAULT_TOOL_TIMEOUT = _default_timeout()
 # Must match ``ATTR`` in src/static/js/dom_walker.js.
 ZENDRIVER_ID_ATTR = "data-zendriver-id"
 
+# Tools whose calls are captured while a recording is active. Reads and
+# browser lifecycle stay out, so a replay only repeats what drove the
+# page. The tree/snapshot tools are in because they hand out the ids and
+# uids that later click/type steps refer to.
+RECORDED_TOOLS = frozenset(
+    {
+        "navigate",
+        "go_back",
+        "go_forward",
+        "reload_page",
+        "new_tab",
+        "switch_tab",
+        "close_tab",
+        "get_interaction_tree",
+        "get_accessibility_snapshot",
+        "click",
+        "click_shadow",
+        "click_by_uid",
+        "human_click",
+        "mouse_click",
+        "type_text",
+        "human_type",
+        "clear_input",
+        "focus_element",
+        "select_option",
+        "upload_file",
+        "fill_form",
+        "submit_form",
+        "press_key",
+        "press_enter",
+        "scroll",
+        "scroll_to_element",
+        "hide_element",
+        "remove_element",
+        "wait",
+        "wait_for_element",
+        "wait_for_text",
+        "wait_for_network",
+        "wait_for_request",
+    }
+)
+
 
 class ToolBase(ABC):
     """base class providing shared functionality for all tool modules"""
+
+    # Every registered tool by name, guard included. ``replay_action_sequence``
+    # dispatches through this so a replayed step behaves like a client call.
+    _tools: dict[str, Callable[..., Coroutine[Any, Any, Any]]] = {}
 
     def __init__(self, mcp: FastMCP):
         self._mcp = mcp
@@ -76,9 +122,15 @@ class ToolBase(ABC):
         """
         budget = float(timeout) if timeout is not None else DEFAULT_TOOL_TIMEOUT
         name = fn.__name__
+        signature = inspect.signature(fn)
 
         @functools.wraps(fn)
         async def guarded(*args: Any, **kwargs: Any) -> Any:
+            # Recording happens here, at the tool boundary, so a tool that
+            # calls another one internally (type_text -> click) is captured
+            # once instead of replaying the inner step twice.
+            if name in RECORDED_TOOLS:
+                self._session.record_action(name, signature.bind(*args, **kwargs).arguments)
             try:
                 return await asyncio.wait_for(fn(*args, **kwargs), timeout=budget)
             except asyncio.TimeoutError as exc:
@@ -86,7 +138,7 @@ class ToolBase(ABC):
 
         # Preserve the original signature so FastMCP still introspects the
         # right schema; wait_for+wraps keeps the coroutine type alive.
-        guarded.__signature__ = inspect.signature(fn)  # type: ignore[attr-defined]
+        guarded.__signature__ = signature  # type: ignore[attr-defined]
         # Delete __wrapped__ so FastMCP's introspection doesn't follow it
         # back to the unbound function (which would expose `self` in the
         # schema and make the tool uncallable from the client).
@@ -94,6 +146,7 @@ class ToolBase(ABC):
             delattr(guarded, "__wrapped__")
         # Marker so tests and tooling can verify the guard is in place.
         guarded.__zendriver_timeout__ = budget  # type: ignore[attr-defined]
+        ToolBase._tools[name] = guarded
         self._mcp.tool()(guarded)
 
     @property
@@ -116,6 +169,19 @@ class ToolBase(ABC):
             .replace("\n", "\\n")
             .replace("\r", "\\r")
         )
+
+    @staticmethod
+    def _paginate(text: str, max_chars: int, offset: int) -> str:
+        """Slice ``text`` with a one-line header so agents can paginate."""
+        max_chars = max(1, max_chars)
+        total = len(text)
+        offset = min(max(0, offset), total)
+        chunk = text[offset : offset + max_chars]
+        end = offset + len(chunk)
+        header = f"[chars {offset}-{end} of {total}]"
+        if end < total:
+            header += f" (next: offset={end})"
+        return f"{header}\n{chunk}"
 
     async def get_element(self, selector: str, timeout: float = 2.0):
         """Get element by selector or raise ``ElementNotFoundError`` fast.

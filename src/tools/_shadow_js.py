@@ -1,12 +1,15 @@
-"""Shared JavaScript snippets for shadow-DOM-aware queries and clicks.
+"""Shared JavaScript snippets for shadow-DOM-aware queries.
 
 Modern design systems (bunq, NS, bol.com, etc.) nest real interactive
 elements several shadow-root deep inside custom elements like
 ``<nes-selectable-radio>`` -> shadowRoot -> ``<nes-selectable>`` ->
 shadowRoot -> ``[role="radio"]``. A plain ``document.querySelector`` or
 even a one-level ``shadowRoot.querySelector`` misses these. These
-helpers recursively pierce every open shadow root and also dispatch
-click events that cross shadow boundaries.
+helpers recursively pierce every open shadow root to locate the real
+interactive leaf and return its viewport-centre coords; Python then
+fires a trusted CDP ``Input.dispatchMouseEvent`` at those coords
+(synthetic JS events have ``isTrusted = false`` and are ignored by
+Fluent UI combobox, Office Fabric callouts and similar frameworks).
 """
 
 from __future__ import annotations
@@ -43,7 +46,9 @@ function walkAll(root, cb) {
   const w = (doc || document).createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null);
   let n = w.currentNode;
   while (n) {
-    cb(n);
+    // The walker starts on ``root`` itself, which is a document or a
+    // shadow root on every call - not an element, so no tagName.
+    if (n.nodeType === 1) cb(n);
     if (n.shadowRoot) walkAll(n.shadowRoot, cb);
     n = w.nextNode();
   }
@@ -95,119 +100,29 @@ function findInnerClickable(host, maxDepth) {{
 """
 
 
-# Dispatches a pointer+click sequence that survives shadow boundaries.
-# Some frameworks listen on pointerdown / pointerup (e.g. Lit-based
-# components); only dispatching "click" leaves them unconvinced.
-DISPATCH_CLICK_JS = """
-function dispatchClick(target) {
-  try { target.scrollIntoView({ block: "center" }); } catch (_) {}
-  const opts = { bubbles: true, composed: true, cancelable: true, view: window };
-  ["pointerdown", "mousedown", "pointerup", "mouseup", "click"].forEach((t) => {
-    target.dispatchEvent(new MouseEvent(t, opts));
-  });
-  if (typeof target.click === "function") {
-    try { target.click(); } catch (_) {}
-  }
-}
-"""
-
-
-# Main helper used by elements.click(text=...): walk the composed tree,
-# pick the tightest text match, climb/dive to the most interactive
-# candidate, and dispatch a composed click sequence on it.
-CLICK_BY_TEXT_SHADOW_JS = (
-    WALK_ALL_JS
-    + FIND_INNER_CLICKABLE_JS
-    + DISPATCH_CLICK_JS
-    + """
-function clickByTextShadow(target) {
-  const needle = (target || "").trim().toLowerCase();
-  if (!needle) return { ok: false, reason: "empty_text" };
-  const candidates = [];
-  walkAll(document, (el) => {
-    const text = (el.innerText || el.textContent || "").trim();
-    if (!text) return;
-    if (!text.toLowerCase().includes(needle)) return;
-    candidates.push(el);
-  });
-  if (candidates.length === 0) return { ok: false, reason: "no_match" };
-
-  // Prefer the deepest, smallest match. A match on <body> also matches
-  // every descendant; the tightest wrapper is almost always what the
-  // caller meant.
-  candidates.sort((a, b) => {
-    const at = (a.innerText || a.textContent || "").length;
-    const bt = (b.innerText || b.textContent || "").length;
-    return at - bt;
-  });
-
-  // Pick the first clickable candidate (either itself or via a climb/
-  // dive through shadow DOM).
-  let pick = null;
-  for (const el of candidates) {
-    if (isClickableEl(el)) { pick = el; break; }
-    // Climb up to find a clickable ancestor, crossing shadow boundaries.
-    let p = el.parentNode;
-    while (p) {
-      if (p.host) p = p.host;
-      if (p && p.nodeType === 1 && isClickableEl(p)) { pick = p; break; }
-      p = p && p.parentNode;
-    }
-    if (pick) break;
-  }
-  if (!pick) pick = candidates[0];
-
-  // Normalize to the nearest real navigable ancestor. A <span>/icon
-  // inside an <a> often matches isClickableEl via cursor:pointer, and
-  // dispatching events on that inner element never fires the <a>'s
-  // default navigation. closest() climbs to the owning link/button
-  // within the current (light or shadow) DOM context and gives us a
-  // target whose .click() actually navigates.
-  if (pick && typeof pick.closest === "function") {
-    const navigable = pick.closest("a, button, [role='link'], [role='button']");
-    if (navigable) pick = navigable;
-  }
-
-  // If the pick is a custom element host, dive into its shadow DOM chain
-  // until we hit a leaf-level clickable (button, role=radio, etc.).
-  const inner = findInnerClickable(pick, 5);
-  const targetEl = inner || pick;
-  dispatchClick(targetEl);
-  return {
-    ok: true,
-    tag: targetEl.tagName,
-    role: targetEl.getAttribute ? (targetEl.getAttribute("role") || null) : null,
-    shadow_depth: inner ? (function () {
-      // Count how many shadow boundaries we crossed from `pick` to `inner`.
-      let d = 0; let cur = inner;
-      while (cur && cur !== pick) {
-        if (cur.getRootNode && cur.getRootNode().host) d++;
-        cur = cur.parentNode || (cur.getRootNode && cur.getRootNode().host);
-      }
-      return d;
-    })() : 0,
-    text: (targetEl.innerText || targetEl.textContent || "").trim().slice(0, 80),
-  };
-}
-"""
-)
-
-
-# Click helper used by the explicit click_shadow tool: given a host
-# selector in the light DOM, walk into its nested shadow roots and click
-# the deepest interactive element we can reach.
-CLICK_SHADOW_HOST_JS = (
+# Coord-returning helper used by click_shadow: resolve the nested
+# interactive leaf inside a host and return its viewport-centre coords
+# so Python can fire a real CDP ``Input.dispatchMouseEvent``. We don't
+# dispatch synthetic events here because ``isTrusted = false`` events
+# are ignored by Fluent UI v8 combobox, Office Fabric callouts and a
+# few shadow-DOM design systems that gate behaviour on trust.
+FIND_SHADOW_HOST_COORDS_JS = (
     FIND_INNER_CLICKABLE_JS
-    + DISPATCH_CLICK_JS
     + """
-function clickShadowHost(hostSelector, maxDepth) {
+function findShadowHostCoords(hostSelector, maxDepth) {
   const host = document.querySelector(hostSelector);
   if (!host) return { ok: false, reason: "host_not_found" };
   const inner = findInnerClickable(host, maxDepth || 6);
   if (!inner) return { ok: false, reason: "no_inner_clickable" };
-  dispatchClick(inner);
+  try { inner.scrollIntoView({ block: "center" }); } catch (_) {}
+  const rect = inner.getBoundingClientRect();
+  if (!rect || (rect.width === 0 && rect.height === 0)) {
+    return { ok: false, reason: "no_rect", tag: inner.tagName };
+  }
   return {
     ok: true,
+    x: rect.left + rect.width / 2,
+    y: rect.top + rect.height / 2,
     tag: inner.tagName,
     role: inner.getAttribute ? (inner.getAttribute("role") || null) : null,
     text: (inner.innerText || inner.textContent || "").trim().slice(0, 80),
@@ -217,11 +132,11 @@ function clickShadowHost(hostSelector, maxDepth) {
 )
 
 
-# Shadow-aware coord lookup for human_click: find the same "tightest
-# interactive element" as clickByTextShadow but return its viewport
-# center instead of dispatching synthetic events. The human-input
-# pipeline then moves the cursor there with a bezier path and performs
-# a real CDP Input.dispatchMouseEvent click sequence.
+# Shadow-aware coord lookup used by both click(text=...) and
+# human_click(text=...): walk light + shadow DOM, pick the tightest text
+# match, climb/dive to the real interactive leaf and return its
+# viewport-centre coords. Python fires a CDP mouse click there directly
+# (click) or first moves the cursor along a bezier path (human_click).
 FIND_CLICK_COORDS_BY_TEXT_JS = (
     WALK_ALL_JS
     + FIND_INNER_CLICKABLE_JS
@@ -273,7 +188,7 @@ function findClickCoordsByText(target) {
     x: rect.left + rect.width / 2,
     y: rect.top + rect.height / 2,
     tag: targetEl.tagName,
-    shadow: !!inner,
+    shadow: targetEl.getRootNode() instanceof ShadowRoot,
     text: (targetEl.innerText || targetEl.textContent || "").trim().slice(0, 80),
   };
 }

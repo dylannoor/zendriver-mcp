@@ -85,13 +85,13 @@ class QueryTools(ToolBase):
         return "Error: Provide selector or text"
 
     async def find_all_elements(self, selector: str, limit: int = 20) -> str:
-        """Find all elements matching a selector. Returns quickly on no match.
+        """Find all elements matching a selector.
 
-        ``limit`` caps the number of summary rows; the total count is always
-        accurate. Zendriver's ``select_all`` raises ``TimeoutError`` after
-        ~10s on zero matches, which we catch and translate to a clean
-        "no elements found" message.
+        ``limit`` caps the rows shown; the reported total stays accurate.
         """
+        # Zendriver's ``select_all`` raises ``TimeoutError`` after ~10s on zero
+        # matches, which we catch and translate to a clean "no elements found"
+        # message.
         import asyncio as _asyncio
 
         try:
@@ -126,16 +126,12 @@ class QueryTools(ToolBase):
         return str(value) if value else "(not set)"
 
     async def find_buttons(self, filter_text: str | None = None) -> str:
-        """Find all clickable elements on the page - including shadow DOM.
+        """Find all clickable elements on the page, including inside shadow DOM.
 
-        Walks both the light DOM and every open shadow root, so buttons
-        hidden inside custom elements like ``<nes-button>`` or
-        ``<sds-cta>`` show up. Recognises native tags (button, a, input,
-        summary) plus ARIA roles (button, link, checkbox, radio, switch,
-        menuitem, tab, option, treeitem) and cursor=pointer elements
-        with an onclick handler. Each entry shows the host's CSS
-        selector; for shadow-wrapped buttons use ``click_shadow`` to
-        reach the inner interactive element.
+        Covers native tags, ARIA roles (button, link, checkbox, radio, tab,
+        ...) and cursor=pointer elements with an onclick handler. Entries
+        show the host's CSS selector; use ``click_shadow`` for controls
+        wrapped in a custom element.
         """
         import json as _json
 
@@ -157,14 +153,12 @@ class QueryTools(ToolBase):
         return "\n".join(lines)
 
     async def find_inputs(self, filter_type: str | None = None) -> str:
-        """Find all input fields on the page - including shadow DOM.
+        """Find all input fields on the page, including inside shadow DOM.
 
-        Walks both the light DOM and every open shadow root. Recognises
-        ``<input>``, ``<textarea>``, ``role=textbox/searchbox/combobox``,
-        ``[contenteditable="true"]`` and custom elements whose tag name
-        suggests an input (contains "input" or "field"). ``filter_type``
-        is a case-insensitive substring match against the input's type
-        attribute or ARIA role.
+        Covers ``<input>``, ``<textarea>``, textbox/searchbox/combobox
+        roles, contenteditable and input-like custom elements.
+        ``filter_type`` is a case-insensitive substring of the input's
+        type attribute or ARIA role.
         """
         import json as _json
 

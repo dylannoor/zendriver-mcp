@@ -12,7 +12,7 @@ def test_mcp_server_initialises() -> None:
 def test_expected_tool_count() -> None:
     # Guards against accidental tool removal; bump when we deliberately add tools.
     tools = mcp._tool_manager._tools
-    assert len(tools) >= 98, f"expected at least 98 tools registered, got {len(tools)}"
+    assert len(tools) >= 111, f"expected at least 111 tools registered, got {len(tools)}"
 
 
 def test_core_tools_registered() -> None:
@@ -63,6 +63,19 @@ def test_core_tools_registered() -> None:
         "check_ffmpeg_available",
         "click_shadow",
         "describe_shadow",
+        "get_links",
+        "extract_table",
+        "extract_structured_data",
+        "highlight_element",
+        "hide_element",
+        "remove_element",
+        "get_network_response_body",
+        "screenshot_element",
+        "wait_for_text",
+        "download_file",
+        "start_recording",
+        "stop_recording",
+        "replay_action_sequence",
     }
     missing = must_have - tools.keys()
     assert not missing, f"missing core tools: {missing}"

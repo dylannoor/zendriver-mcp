@@ -1,6 +1,6 @@
 # Tool reference
 
-96 tools across 22 modules. Full signatures live in the module docstrings
+111 tools across 23 modules. Full signatures live in the module docstrings
 (`src/tools/*.py`); this page is a flat catalogue.
 
 ## Browser lifecycle (`browser.py`)
@@ -22,8 +22,11 @@
 ## Elements (`elements.py`)
 
 - `click(selector, text)`, `type_text(text, selector)`, `clear_input(selector)`
+- `click_shadow(selector, max_depth)`, `describe_shadow(selector, max_depth)`
 - `focus_element(selector)`, `select_option(selector, value)`
 - `upload_file(selector, file_path)`
+- `highlight_element(selector, color, duration)` - outline for visual debugging
+- `hide_element(selector)`, `remove_element(selector)` - popups, cookie banners, ads
 
 ## Query (`query.py`)
 
@@ -35,6 +38,9 @@
 
 - `get_content()`, `get_text_content()`
 - `get_interaction_tree()` - the token-optimised DOM walker
+- `get_links(filter_text, internal_only, limit)`
+- `extract_table(selector, format, max_rows)` - `json` or `markdown`
+- `extract_structured_data(max_chars, offset)` - JSON-LD, OpenGraph, Twitter, meta tags
 - `scroll(direction, pixels)`, `scroll_to_element(selector)`
 
 ## Storage - legacy (`storage.py`)
@@ -49,7 +55,9 @@ the `cookies` module.
 ## Logging (`logging.py`)
 
 - `get_network_logs(limit)`, `get_console_logs(limit)`, `clear_logs()`
-- `wait_for_network(url_pattern, timeout)`, `wait_for_request(url_pattern, timeout)`
+- `wait_for_network(timeout, idle_time)`, `wait_for_request(url_pattern, timeout, method)`
+- `get_network_response_body(url_pattern, method, max_chars, offset)` - body of the
+  latest matching captured request
 
 ## Forms (`forms.py`)
 
@@ -58,8 +66,11 @@ the `cookies` module.
 
 ## Utils (`utils.py`)
 
-- `screenshot(save_path)`, `execute_js(script)`, `wait(seconds)`
-- `wait_for_element(selector, timeout)`, `run_security_audit()`
+- `screenshot(save_path, full_resolution)`, `screenshot_element(selector, save_path)`
+- `execute_js(script)`, `wait(seconds)`
+- `wait_for_element(selector, timeout)`, `wait_for_text(text, timeout)`
+- `download_file(url, save_path)` - in-page fetch with the session's cookies
+- `run_security_audit()`
 
 ## Stealth (`stealth.py`)
 
@@ -144,3 +155,12 @@ the browser. Session state in a `user_data_dir` survives the restart.
 - `fail_requests(url_pattern, error_reason)` - returns `rule_id`
 - `list_interceptions()`
 - `stop_interception(rule_id)` - omit for clear-all
+
+## Recording (`recording.py`)
+
+Captures action tools (navigation, clicks, typing, scrolling, waits) at
+the tool boundary. A replay validates every step first and stops at the
+first failing one.
+
+- `start_recording()`, `stop_recording()` - returns the actions as JSON
+- `replay_action_sequence(sequence)`

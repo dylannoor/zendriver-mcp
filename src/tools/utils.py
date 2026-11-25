@@ -1,4 +1,5 @@
-# utility tools - screenshot, js execution, waiting, security audit
+# utility tools - screenshot, js execution, waiting, security audit, downloads
+import base64
 import io
 import json
 import os
@@ -7,11 +8,25 @@ from datetime import datetime
 
 from mcp.server.fastmcp.utilities.types import Image
 from PIL import Image as PILImage
+from zendriver import cdp
 
 from src.artifacts import resolve_artifact_path
+from src.errors import ElementNotFoundError, ZendriverMCPError
+from src.tools._shadow_js import WALK_ALL_JS
 from src.tools.base import ToolBase
 
 MAX_SCREENSHOT_WIDTH = 1024
+
+
+def _to_jpeg(rgb: PILImage.Image, downscale: bool = True) -> bytes:
+    """Encode as JPEG, capped at ``MAX_SCREENSHOT_WIDTH`` unless ``downscale`` is off."""
+    if downscale and rgb.width > MAX_SCREENSHOT_WIDTH:
+        new_height = round(rgb.height * MAX_SCREENSHOT_WIDTH / rgb.width)
+        rgb = rgb.resize((MAX_SCREENSHOT_WIDTH, new_height), PILImage.Resampling.LANCZOS)
+    buffer = io.BytesIO()
+    # quality 60 keeps a full-page shot under the 1MB response limit
+    rgb.save(buffer, format="JPEG", quality=60, optimize=True)
+    return buffer.getvalue()
 
 
 class UtilityTools(ToolBase):
@@ -20,9 +35,12 @@ class UtilityTools(ToolBase):
     def _register_tools(self) -> None:
         """register utility tools"""
         self._register(self.screenshot)
+        self._register(self.screenshot_element)
         self._register(self.execute_js)
         self._register(self.wait)
         self._register(self.wait_for_element)
+        self._register(self.wait_for_text)
+        self._register(self.download_file, timeout=300)
         self._register(self.run_security_audit)
 
     async def screenshot(
@@ -47,18 +65,9 @@ class UtilityTools(ToolBase):
 
         try:
             await self.session.page.save_screenshot(tmp_path)
-            # compress to JPEG for smaller size (under 1MB limit)
             with PILImage.open(tmp_path) as img:
                 rgb = img.convert("RGB")
-                full_res = rgb
-                if not full_resolution and rgb.width > MAX_SCREENSHOT_WIDTH:
-                    new_height = round(rgb.height * MAX_SCREENSHOT_WIDTH / rgb.width)
-                    rgb = rgb.resize(
-                        (MAX_SCREENSHOT_WIDTH, new_height), PILImage.Resampling.LANCZOS
-                    )
-                buffer = io.BytesIO()
-                rgb.save(buffer, format="JPEG", quality=60, optimize=True)
-                jpeg_data = buffer.getvalue()
+                jpeg_data = _to_jpeg(rgb, downscale=not full_resolution)
 
                 # If save_path provided, resolve through the sandbox then
                 # pick the format from the extension. Saved files keep the
@@ -74,17 +83,59 @@ class UtilityTools(ToolBase):
                     if ext in [".png", ".gif", ".bmp"]:
                         with PILImage.open(tmp_path) as orig:
                             orig.save(str(resolved))
-                    elif full_res is rgb:
-                        resolved.write_bytes(jpeg_data)
                     else:
-                        full_buffer = io.BytesIO()
-                        full_res.save(full_buffer, format="JPEG", quality=60, optimize=True)
-                        resolved.write_bytes(full_buffer.getvalue())
+                        resolved.write_bytes(_to_jpeg(rgb, downscale=False))
 
                 return Image(data=jpeg_data, format="jpeg")
         finally:
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
+
+    async def screenshot_element(self, selector: str, save_path: str | None = None) -> Image:
+        """Screenshot one element as JPEG, downscaled to max 1024px wide.
+
+        ``save_path`` also saves it to disk at full resolution (PNG or JPEG
+        by extension).
+        """
+        selector = self.resolve_selector(selector)
+        # Own clip instead of zendriver's ``elem.screenshot_b64``: that one
+        # passes viewport-relative coords as a document-relative clip, so
+        # it captures the wrong region as soon as the page is scrolled.
+        rect = await self.run_js(f"""
+            (function() {{
+                const el = document.querySelector({json.dumps(selector)});
+                if (!el) return null;
+                el.scrollIntoView({{ block: "center" }});
+                const r = el.getBoundingClientRect();
+                return [r.left + window.scrollX, r.top + window.scrollY, r.width, r.height];
+            }})()
+        """)
+        if rect is None:
+            raise ElementNotFoundError(selector)
+        x, y, width, height = rect
+        if width <= 0 or height <= 0:
+            raise ZendriverMCPError(f"Cannot screenshot {selector}: element has no size")
+        png = base64.b64decode(
+            await self.session.page.send(
+                cdp.page.capture_screenshot(
+                    format_="png",
+                    clip=cdp.page.Viewport(x=x, y=y, width=width, height=height, scale=1),
+                    capture_beyond_viewport=True,
+                )
+            )
+        )
+        with PILImage.open(io.BytesIO(png)) as img:
+            rgb = img.convert("RGB")
+
+        if save_path:
+            is_png = os.path.splitext(save_path)[1].lower() == ".png"
+            resolved = resolve_artifact_path(
+                save_path,
+                default_prefix="zendriver-element",
+                default_ext="png" if is_png else "jpg",
+            )
+            resolved.write_bytes(png if is_png else _to_jpeg(rgb, downscale=False))
+        return Image(data=_to_jpeg(rgb), format="jpeg")
 
     async def execute_js(self, script: str) -> str:
         """Execute JavaScript code on the page and return the result.
@@ -191,6 +242,73 @@ class UtilityTools(ToolBase):
 
         hint = f" ({suggestions})" if suggestions else ""
         return f"Timeout: Element not found after {timeout}s: {selector}{hint}"
+
+    async def wait_for_text(self, text: str, timeout: float = 10.0) -> str:
+        """Wait until ``text`` appears on the page (case-insensitive, shadow-DOM aware)."""
+        # ``body.innerText`` stops at shadow roots, so walk those as well:
+        # click(text=...) can reach that text and the two should agree.
+        script = f"""
+            (() => {{
+                {WALK_ALL_JS}
+                const needle = {json.dumps(text.lower())};
+                const has = (t) => (t || "").toLowerCase().includes(needle);
+                if (has(document.body && document.body.innerText)) return true;
+                let hit = false;
+                walkAll(document, (el) => {{
+                    if (!hit && el.shadowRoot && has(el.shadowRoot.textContent)) hit = true;
+                }});
+                return hit;
+            }})()
+        """
+
+        async def check() -> bool:
+            try:
+                return bool(await self.run_js(script))
+            except Exception:  # noqa: BLE001 - mid-navigation evaluate errors mean "not yet"
+                return False
+
+        if await self.wait_for_condition(check, timeout):
+            return f"Text found: '{text}'"
+        return f"Timeout: Text '{text}' not found after {timeout}s"
+
+    async def download_file(self, url: str, save_path: str = "") -> str:
+        """Download ``url`` with the page's cookies and session; returns the saved path.
+
+        Cross-origin URLs need CORS, so navigate to the file's site first.
+        Empty ``save_path`` writes to a temp file.
+        """
+        # ponytail: in-page fetch, so CORS applies and the whole file crosses
+        # CDP as one base64 string. Move to Browser.setDownloadBehavior when
+        # cross-origin or multi-hundred-MB downloads matter.
+        result = await self.session.page.evaluate(
+            f"""
+            (async () => {{
+                try {{
+                    const resp = await fetch({json.dumps(url)});
+                    if (!resp.ok) return {{ error: "HTTP " + resp.status + " " + resp.statusText }};
+                    const bytes = new Uint8Array(await resp.arrayBuffer());
+                    let bin = "";
+                    for (let i = 0; i < bytes.length; i += 0x8000) {{
+                        bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+                    }}
+                    return {{ data: btoa(bin), type: resp.headers.get("content-type") || "unknown" }};
+                }} catch (e) {{
+                    return {{ error: String(e) }};
+                }}
+            }})()
+            """,
+            await_promise=True,
+        )
+        if not isinstance(result, dict) or "data" not in result:
+            reason = result.get("error") if isinstance(result, dict) else "no response"
+            raise ZendriverMCPError(f"Download of {url} failed: {reason}")
+
+        data = base64.b64decode(result["data"])
+        resolved = resolve_artifact_path(
+            save_path, default_prefix="zendriver-download", default_ext="bin"
+        )
+        resolved.write_bytes(data)
+        return f"Downloaded {len(data)} bytes ({result['type']}) to {resolved}"
 
     async def run_security_audit(self) -> str:
         """Run a comprehensive security audit on the current page.
